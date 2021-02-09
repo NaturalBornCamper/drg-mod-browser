@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deep Rock Galactic janky mod browser</title>
+    <!--    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>-->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"
+            integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+            crossorigin="anonymous"></script>
+    <style>
+        html, body {
+            max-height: 100%;
+            font-family: BebasNeue, sans-serif;
+        }
+
+        body {
+            justify-content: center;
+            background: #322c20;
+            background-repeat: no-repeat;
+            background: linear-gradient(
+                    135deg, #322c20, #5f5137) fixed;
+            filter: progid:DXImageTransform.Microsoft.gradient(startColorstr="#322c20", endColorstr="$brown", GradientType=1);
+            font-family: BebasNeue, sans-serif;
+            overflow: hidden;
+            max-height: 100%;
+        }
+
+        .button {
+            cursor: pointer;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0.3rem 0 0.3rem 0;
+            background-color: #fc9e00;
+            padding: 0.2rem;
+        }
+
+        .button:hover, .button.selected {
+            background-color: #fccc00;
+        }
+
+        .button.selected {
+            box-shadow: inset 0 0 0 2px #fffbff;
+        }
+
+        .categories .row {
+            text-transform: uppercase;
+            font-weight: bold;
+            font-size: 90%;
+        }
+
+        #header {
+            background-color: #352e1e;
+            color: #fffbff;
+            text-align: center;
+            font-weight: bolder;
+        }
+
+        #mod-list {
+            position: absolute;
+            overflow-y: scroll;
+            height: 100%;
+            background-color: #352e1e;
+            font-style: italic;
+        }
+
+        #mod-details {
+            color: #fffbff;
+            padding: 1rem;
+        }
+
+        #description, #download-url {
+            padding-top: 2rem;
+        }
+
+        .tight-col {
+            padding-right: 0.2rem;
+            padding-left: 0.2rem;
+        }
+
+        ::-webkit-scrollbar-button {
+            display: none;
+            height: 12px;
+            border-radius: 0;
+            background-color: #aaa;
+        }
+
+        ::-webkit-scrollbar-button:hover {
+            background-color: #aaa;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #fc9e00;
+            border-radius: 0;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #fffbff;
+            border-radius: 0;
+        }
+
+        ::-webkit-scrollbar-track {
+            background-color: #352e1e;
+            border-radius: 0;
+        }
+
+        ::-webkit-scrollbar-track:hover {
+            background-color: #352e1e;
+            border-radius: 0;
+        }
+
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+    </style>
+</head>
+<body>
+<div id="header" class="row">
+    <div class="col col-2">MAIN CATEGORY</div>
+    <div class="col col-2">SUB CATEGORY</div>
+    <div class="col col-2">SUB SUB CATEGORY</div>
+    <div class="col col-2">MODS</div>
+    <div class="col col-4">MOD DETAILS</div>
+</div>
+<div id="body" class="row">
+    <div id="categories-0" class="tight-col col col-2 categories"></div>
+    <div id="categories-1" class="tight-col col col-2 categories"></div>
+    <div id="categories-2" class="tight-col col col-2 categories"></div>
+    <div class="tight-col col col-2">
+        <div id="mod-list" class="col col-2"></div>
+    </div>
+    <div id="mod-details" class="col col-4" style="display: none">
+        <div class="row">
+            <h4 id="name" class="col col-9"></h4>
+        </div>
+        <div class="row">
+            <div class="col col-3">Version:</div>
+            <div id="version" class="col col-9"></div>
+        </div>
+        <div class="row">
+            <div class="col col-3">Drg Version:</div>
+            <div id="drg-version" class="col col-9"></div>
+        </div>
+        <div class="row">
+            <div class="col col-3">Authors:</div>
+            <div id="author-ids" class="col col-9"></div>
+        </div>
+        <div class="row">
+            <div id="description"></div>
+        </div>
+        <div class="row">
+            <a id="download-url">Download</a>
+        </div>
+    </div>
+</div>
+<script>
+    /**
+     * sort categories and mods
+     * add links auto
+     * fetch Discord user
+     */
+    let mods_json = null;
+
+    function slugify(text) {
+        return text
+            .toLowerCase()
+            .replace(/[^\w ]+/g, '')
+            .replace(/ +/g, '-')
+            ;
+    }
+
+    $(function () {
+        const REGEX = /raw\/.+?\/(.+)%20-%20V/mi;
+        const MOD_COLUMN_INDEX = 3;
+        let existing_categories = [[], [], []];
+        let mod_counts = {};
+        let category_selectors = [
+            $('#categories-0'),
+            $('#categories-1'),
+            $('#categories-2')
+        ];
+        let mod_list_selector = $('#mod-list');
+        let body = $('#body');
+
+        body.on('click', '.filter', function (event) {
+            let column = $(this).data('column');
+            console.log(column)
+            console.log($(this).data('filter'));
+            let bob = $('#body .row');
+            bob.filter(function () {
+                return $(this).attr('data-column') >= column;
+            }).removeClass('selected');
+
+            bob = bob.filter(function () {
+                return $(this).attr('data-column') > column;
+            });
+
+            // bob.fadeOut('fast').fadeOut();
+            $.when(this, bob, bob.fadeOut('fast')).done(function (that, yo) {
+                yo.find('.row').fadeIn('fast');
+                yo.filter($(that).data('filter')).fadeIn('fast');
+            });
+        });
+
+        body.on('click', '.mod', function (event) {
+            $('.mod').removeClass('selected');
+            let mod = mods_json[$(this).data('mod_id')];
+            $.when(mod, $('#mod-details').fadeOut(100)).done(function (mod) {
+                $('#name').html(mod.DisplayName);
+                $('#version').html(mod.Version);
+                $('#drg-version').html(mod.DrgVersion);
+                $('#author-ids').html(mod.AuthorIds);
+                $('#description').html(mod.Description.replace(/(?:\r\n|\r|\n)/g, '<br>'));
+                $('#download-url').attr('href', mod.DownloadUrl).attr('target', mod.DisplayName);
+                $('#mod-details').fadeIn(100);
+            });
+        });
+
+        body.on('click', '.filter, .mod', function (event) {
+            $(this).addClass('selected');
+        });
+
+        $.getJSON('https://raw.githubusercontent.com/ArcticEcho/DRG-Mods/main/Mod%20Index.json', function (data) {
+            mods_json = data;
+            Object.keys(data).forEach(function (mod_id) {
+                if ((m = REGEX.exec(data[mod_id].DownloadUrl)) !== null) {
+                    bobs = decodeURIComponent(m[1]);
+                    let onclick_filter = "";
+                    let filter_classes = "";
+
+                    // Loop in url parts
+                    bobs.split("/").forEach(function (url_part, index, array) {
+                        let current_class = `row button  ${filter_classes}`;
+                        if (index === array.length - 1) { // Mod title
+                            // This part is the title of the mod
+                            mod_list_selector.append(
+                                `<div class="mod ${current_class}" data-mod_id="${mod_id}" data-column="${MOD_COLUMN_INDEX}">${url_part}</div>`
+                            );
+                        } else { // Mod category / sub-category
+                            onclick_filter += `.${slugify(url_part)}-${index}`;
+                            if (!existing_categories[index].includes(url_part)) { // Category first-time encounter
+                                // Category not yet encountered, create filter new row
+                                existing_categories[index].push(url_part);
+                                category_selectors[index].append(
+                                    `<div class="filter ${current_class}" data-filter="${onclick_filter}" data-column="${index}">${url_part}</div>`
+                                );
+                            }
+                            filter_classes += ` ${slugify(url_part)}-${index}`;
+
+                            // Increment mod counter
+                            if (mod_counts.hasOwnProperty(onclick_filter)) {
+                                mod_counts[onclick_filter] += 1;
+                            } else {
+                                mod_counts[onclick_filter] = 1;
+                            }
+                        }
+                    });
+                }
+            });
+
+            Object.keys(mod_counts).forEach(function (category_filter) {
+                let bob = $(`div[data-filter='${category_filter}']`);
+                bob.html(`${bob.html()} (${mod_counts[category_filter]})`);
+            });
+
+            $('#categories-0').find('div:first-child').trigger('click');
+        });
+    })
+</script>
+</body>
+</html>
